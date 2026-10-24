@@ -90,8 +90,9 @@ Verified in this repository on 2026-10-24 unless noted:
 - The current installer is `nsis: { oneClick: true, perMachine: false }`, and **the author already has a
   one-click 3.1.0 installed on their daily-use machine.** This drives §7.8.
 - **The author builds on Windows.** A macOS machine is reachable **3–5 days a week** — a recent Apple
-  Silicon laptop belonging to a friend who may become a user of the app herself (§11.1). There is no Linux
-  machine and no plan to obtain one.
+  Silicon laptop belonging to a friend who may become a user of the app herself (§11.1). A **Linux VM
+  exists** but is rarely used and is not available for testing in this cycle — so Linux is eventually
+  verifiable, just not before the first release (§11.2).
 - `CLAUDE.md` §6.5 forbids speculative code and §8 requires phased delivery with verification gates.
 
 ---
