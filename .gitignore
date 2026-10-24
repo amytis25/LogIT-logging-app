@@ -13,3 +13,6 @@ build/
 # the user's real personal data — never committed (CLAUDE.md §10)
 AppLog/
 settings.json
+
+# plan-execution scratch (machine-local, like .claude/)
+.superpowers/
