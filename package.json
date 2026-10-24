@@ -63,7 +63,15 @@
       "icon": "build/icon.png"
     },
     "dmg": {
-      "artifactName": "${productName}-${version}-macOS.${ext}"
+      "artifactName": "${productName}-${version}-macOS.${ext}",
+      "title": "Drag LogIT to Applications",
+      "background": "build/dmg-background.png",
+      "window": { "width": 540, "height": 380 },
+      "iconSize": 96,
+      "contents": [
+        { "x": 140, "y": 167, "type": "file" },
+        { "x": 400, "y": 167, "type": "link", "path": "/Applications" }
+      ]
     },
     "linux": {
       "target": ["AppImage"],
