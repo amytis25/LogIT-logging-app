@@ -10,6 +10,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   DMG_BACKGROUND_HEIGHT, DMG_BACKGROUND_WIDTH, renderDmgBackground
 } from '../scripts/make-icon.mjs';
@@ -31,9 +34,20 @@ test('the 2x background is exactly double', () => {
   assert.equal(png.readUInt32BE(IHDR_HEIGHT_OFFSET), 760);
 });
 
-test('importing the script writes nothing — the file writes are behind a main guard', () => {
-  // The test above imported make-icon.mjs. If the module wrote build/ on import,
-  // generating icons would be a side effect of running the suite.
-  assert.equal(DMG_BACKGROUND_WIDTH, 540);
-  assert.equal(DMG_BACKGROUND_HEIGHT, 380);
+test('importing the script writes nothing — the file writes are behind a main guard', async () => {
+  // Without the guard, running the suite would regenerate build/ as a side
+  // effect. Snapshot the real artefact either way: in CI `npm test` runs before
+  // `npm run icons`, so build/ is usually absent and "still absent" is the
+  // assertion; locally it exists and "mtime unchanged" is.
+  const iconPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)), '..', 'build', 'icon.png'
+  );
+  const before = fs.existsSync(iconPath) ? fs.statSync(iconPath).mtimeMs : null;
+
+  // A fresh module instance: the import at the top of this file is already
+  // cached, so only a cache-busting specifier actually re-evaluates the module.
+  await import(`../scripts/make-icon.mjs?guard-check=${Date.now()}`);
+
+  const after = fs.existsSync(iconPath) ? fs.statSync(iconPath).mtimeMs : null;
+  assert.equal(after, before, 'importing make-icon.mjs wrote to build/');
 });

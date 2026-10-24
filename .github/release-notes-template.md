@@ -26,8 +26,8 @@ Pick the one for your machine:
 
 - 🟢 **Windows 11** — what I build on and use all day, every day. If something is solid
   anywhere, it's here.
-- 🟡 **macOS** — builds, launches, and logged a few entries on one Apple Silicon Mac. That is
-  the entire extent of it. Expect rough edges around the floating button and window behaviour.
+- 🔴 **macOS** — builds. Nobody has launched it yet. Expect rough edges, especially around the
+  floating button and window behaviour. Tell me how it goes and this line gets upgraded.
 - 🔴 **Linux** — builds. Nobody has ever launched it. You would be the first, and I'd
   genuinely like to hear how it goes.
 

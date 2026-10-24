@@ -16,8 +16,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Two pushes in quick succession would otherwise both see "no release yet" and
+# both create a draft — GitHub does not enforce tag uniqueness for drafts,
+# because a draft creates no tag. One release run at a time.
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+# Read by default: the three build jobs package an app and must not be able to
+# touch releases at all. Only gate and release widen this.
 permissions:
-  contents: write
+  contents: read
 
 env:
   NODE_VERSION: '20'
@@ -28,10 +37,11 @@ jobs:
   gate:
     name: Should this version build?
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       build: ${{ steps.decide.outputs.build }}
       replace_draft: ${{ steps.decide.outputs.replace_draft }}
-      version: ${{ steps.decide.outputs.version }}
       tag: ${{ steps.decide.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
@@ -96,7 +106,7 @@ jobs:
       - name: Fail if a generated build asset is missing
         shell: bash
         run: |
-          for asset in build/icon.ico build/icon.png build/dmg-background.png; do
+          for asset in build/icon.ico build/icon.png build/dmg-background.png build/dmg-background@2x.png; do
             if [ ! -f "$asset" ]; then
               echo "missing $asset — build/ is gitignored, so npm run icons must produce it"
               exit 1
@@ -127,6 +137,8 @@ jobs:
     name: Assemble the draft release
     needs: [gate, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
 
@@ -143,20 +155,40 @@ jobs:
       - name: Render the release notes
         run: node scripts/render-release-notes.mjs release-notes.md
 
-      # Only ever a draft: the gate returns build=false when a PUBLISHED release
-      # exists for this version, so nothing published can reach this step.
+      # The gate narrows this risk but does NOT eliminate it, and an earlier
+      # version of this comment wrongly claimed it did. Two ways a published
+      # release can reach a delete that was decided minutes ago:
+      #   1. The gate saw a draft, then the builds ran for several minutes. If
+      #      the author published that draft in the meantime, the tag now names
+      #      a published release.
+      #   2. If a draft and a published release share the tag, `gh release list`
+      #      shows the draft while `gh release delete <tag>` resolves the
+      #      published one — the gate and the delete disagree about the target.
+      # So re-check immediately before deleting, through the same tag-resolution
+      # path gh itself uses. Destroying a published release is anti-goal 6.
       - name: Replace the previous draft
         if: needs.gate.outputs.replace_draft == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release delete "${{ needs.gate.outputs.tag }}" --yes
+        run: |
+          state=$(gh release view "${{ needs.gate.outputs.tag }}" --json isDraft -q .isDraft)
+          if [ "$state" != "true" ]; then
+            echo "refusing to delete ${{ needs.gate.outputs.tag }}: it resolves to a PUBLISHED release"
+            exit 1
+          fi
+          gh release delete "${{ needs.gate.outputs.tag }}" --yes
 
+      # --target pins the tag to the commit these artifacts were built from. Without
+      # it the tag is created at the default branch's head when the draft is
+      # published, so a dispatch from a feature branch would attach this branch's
+      # binaries to a tag pointing at main.
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ needs.gate.outputs.tag }}" \
             --draft \
+            --target "${{ github.sha }}" \
             --title "${{ needs.gate.outputs.tag }}" \
             --notes-file release-notes.md \
             artifacts/*

@@ -54,9 +54,15 @@ export function decideRelease(version, releases) {
 // Inputs:  argv[2] — the release list as JSON; GITHUB_OUTPUT in the environment
 // Outputs: none (writes step outputs and one log line)
 function main() {
+  if (process.argv[2] === undefined) {
+    // Early exit on a validation failure (§6.3 carve-out). Defaulting to an
+    // empty release list would read as "nothing is released yet, go ahead and
+    // build" — fail-open in the one decision that must never guess.
+    throw new Error('release-gate: the release list is required as the first argument');
+  }
   const here = path.dirname(fileURLToPath(import.meta.url));
   const { version } = JSON.parse(fs.readFileSync(path.join(here, '..', 'package.json'), 'utf8'));
-  const decision = decideRelease(version, JSON.parse(process.argv[2] ?? '[]'));
+  const decision = decideRelease(version, JSON.parse(process.argv[2]));
   console.log(`release gate: ${decision.reason}`);
   const outputs = [
     `build=${decision.build}`,

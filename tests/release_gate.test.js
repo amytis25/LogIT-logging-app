@@ -10,7 +10,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { decideRelease } from '../scripts/release-gate.mjs';
+
+const GATE_CLI = path.join(
+  path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'release-gate.mjs'
+);
 
 test('builds when no release exists for the version', () => {
   const decision = decideRelease('3.2.0', []);
@@ -32,6 +39,14 @@ test('builds and replaces when only a DRAFT exists for the version', () => {
 test('a published release for a different version does not block', () => {
   const decision = decideRelease('3.2.0', [{ tagName: 'v3.1.0', isDraft: false }]);
   assert.equal(decision.build, true);
+});
+
+test('the CLI refuses to run without a release list, rather than assuming there is none', () => {
+  // Fail-open is the one thing this gate must never do: absent input must not
+  // read as "no releases exist, go ahead and build".
+  const run = spawnSync(process.execPath, [GATE_CLI], { encoding: 'utf8' });
+  assert.notEqual(run.status, 0, 'missing argument should be a failure, not a default');
+  assert.match(`${run.stderr}${run.stdout}`, /release list/i);
 });
 
 test('every decision carries a reason for the workflow log', () => {
