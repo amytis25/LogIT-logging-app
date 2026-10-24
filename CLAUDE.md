@@ -25,6 +25,9 @@ only user, uses it daily, and will keep using the log files long after the code 
                          auto-loads it from the working directory — move it and nothing
                          reads it. Everything else for Claude lives in docs/claude/.
   README.md              the human-facing project page: install, design notes, layout
+  .github/               release automation only — workflows/release.yml builds all three
+                         platforms and assembles a DRAFT release; release-notes-template.md
+                         is the body it renders. See §8 for why CI exists here at all.
 
   docs/claude/           written for Claude, read on demand (not auto-loaded)
     FUNCTIONAL_SPEC.md   THE SPEC — every behaviour, ASM charts, event→effect tables,
@@ -223,8 +226,20 @@ these two files instead.
 - **Diagrams are ASCII**, not images.
 - **Don't optimize for performance.** Single-user desktop app appending lines to a text file. Nothing here
   is slow.
-- **Don't suggest:** CI/CD, type-checker adoption, logging frameworks, async, multiprocessing, DI
+- **Don't suggest:** type-checker adoption, logging frameworks, async, multiprocessing, DI
   frameworks, Docker, alternative DB backends, cloud anything. All real things, none right for this.
+- **CI/CD was on that list until 2026-10-24, and is now carved out for exactly one thing:**
+  `.github/workflows/release.yml`, which builds the macOS and Linux artifacts. That carve-out exists
+  because the audience changed from one person to a class, and because two of the three platforms
+  **cannot be built on this machine at all** — electron-builder cannot cross-compile a `.dmg` from
+  Windows. Nothing else belongs in CI. No per-push linting, no coverage, no PR gates, no test
+  matrix: suggesting those is still wrong, and `npm test` running inside the release build is the
+  only automation the tests get.
+- **Release work happens on a branch named for the version** (`3.2.0`); the tag carries a `v`
+  (`v3.2.0`) so `git checkout 3.2.0` is never ambiguous. **Nothing machine-readable depends on the
+  branch name** — `package.json`'s `version` is the single source of truth for the tag, all four
+  artifact filenames, and the build-or-skip decision, so they cannot drift apart. Landing a new
+  version on `main` is what cuts a release; landing anything else costs nothing.
 
 ---
 

@@ -5,7 +5,57 @@ This is the "what's true now" file; traps and dead ends live in `GOTCHAS.md`.
 
 ---
 
-## 2026-10-23 (newest) — Claude's docs moved to `docs/claude/`; the repo map rewritten
+## 2026-10-24 (newest) — CI builds all three platforms into a draft release (v3.2.0)
+
+**Change.** `.github/workflows/release.yml` builds Windows, macOS and Linux on their own runners when a
+new version lands on `main`, and assembles the four artifacts into a **draft** GitHub release. Publishing
+stays a manual click. Design: `docs/superpowers/specs/2026-10-24-release-pipeline-design.md`; plan:
+`docs/superpowers/plans/2026-10-24-release-pipeline.md`.
+
+**Why CI exists in a project whose §8 said not to suggest it.** Two reasons, both new. The audience
+changed from one person to a class of engineering students, and **two of the three platforms cannot be
+built on this machine at all** — electron-builder cannot cross-compile a `.dmg` from Windows, and its own
+docs state that macOS code signing works only on macOS. The carve-out is written into `CLAUDE.md` §8 and
+is deliberately narrow: the release path only. No per-push linting, no coverage, no PR gates.
+
+**Four decisions worth recording:**
+
+- **The gate reads *published* releases, not all releases.** A published release for the version means
+  skip, which is what stops an ordinary documentation commit on `main` cutting a release — this repo took
+  five doc-only commits to `main` in a single session, each of which would have produced one. An
+  unpublished **draft** means build and replace it, because a draft is the author's working copy and the
+  phased delivery rebuilds the same version repeatedly. `scripts/release-gate.mjs` is pure and the four
+  cases are proven by `npm test`, not by pushing a commit and waiting four minutes.
+- **Nothing machine-readable depends on the branch name.** The original design had the workflow fail when
+  the branch name disagreed with `package.json`. That check cannot exist: work lands here by fast-forward
+  merge, which leaves no record of the source branch, so enforcing it would have silently required pull
+  requests. The tag, the four filenames and the gate all derive from `package.json`'s `version` instead,
+  so they cannot disagree with one another.
+- **Assembly requires all three builds.** A draft missing its macOS file could be published without the
+  absence being noticed; one red run cannot be. There is no `continue-on-error` anywhere.
+- **The `.dmg` background is generated, not drawn.** `scripts/make-icon.mjs` already rasterises the logo
+  with zero dependencies, so it now also emits the window background. The cost: **no instruction text
+  inside the window** — glyph rendering needs a font, which means a dependency or a hand-maintained
+  binary, and both defeat the reason generation was chosen. The words moved to `dmg.title`.
+
+**Accepted limits.** The macOS and Linux artifacts have never been launched by anyone at the time of
+writing; the release notes say so per-platform, in as many words. Linux is verifiable eventually — a VM
+exists — but not this cycle. The app ships unsigned on every platform: `mac.identity: "-"` does **not**
+produce an ad-hoc signature on electron-builder 24 (see GOTCHAS), so ad-hoc would need a custom `sign`
+hook, and that is deliberately deferred until a real Mac shows it is needed.
+
+**Open.**
+- **The wizard installer's upgrade behaviour is unverified. Owner: user.** Switching NSIS from one-click
+  to a wizard can leave two installations; installing 3.2.0 over the existing 3.1.0 is the check.
+- **No CI run has happened yet. Owner: user.** `workflow_dispatch` only works for workflows on the default
+  branch, so the workflow must reach `main` before it can be exercised at all.
+- **macOS verification is outstanding. Owner: user**, via a friend's Apple Silicon laptop 3–5 days a week.
+- **The README still says macOS has "no prebuilt download".** Deliberately not changed yet — advertising
+  downloads before the macOS check passes would recreate the anti-goal the design exists to prevent.
+
+---
+
+## 2026-10-23 — Claude's docs moved to `docs/claude/`; the repo map rewritten
 
 **Change.** `FUNCTIONAL_SPEC.md`, `UPDATES.md` (this file) and `GOTCHAS.md` moved from the repo root to
 `docs/claude/`. The top level now carries one Claude-facing file instead of four. `CLAUDE.md` §1's repo

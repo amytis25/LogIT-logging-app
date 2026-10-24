@@ -10,6 +10,36 @@ would. Blunt, symptom first. Record what was **tried and didn't work**, not just
 
 ---
 
+## Release pipeline (observed 2026-10-24)
+
+- **`mac.identity: "-"` does NOT ad-hoc sign on electron-builder 24.13.3.** It is the obvious thing to
+  reach for and it quietly does nothing useful: `findIdentity`
+  (`app-builder-lib/out/codeSign/macCodeSign.js:256`) has no special case for `"-"`, so it searches the
+  keychain for a certificate *named* `-`, fails to find one, and falls through to
+  `macPackager.js:195`, which skips signing entirely and returns. The build still succeeds, so the
+  symptom is a shipped app that macOS refuses rather than a failed build. Ad-hoc signing on this version
+  needs a custom `mac.sign` hook. (The v27 docs describe `mac.sign.identity`, a different, nested option
+  that does not exist here — don't plan against them.)
+- **`npm ci` cannot run in this checkout at all.** It fails with
+  `EPERM: operation not permitted, rmdir ...\node_modules\.bin` because the repo lives under OneDrive,
+  which holds handles on files `npm ci` wants to delete first. Nothing is wrong with the lockfile. Use
+  `npm install` locally; CI runners have no pre-existing `node_modules`, so `npm ci` is correct there and
+  works. Don't "fix" the lockfile chasing this.
+- **A version bump leaves `package-lock.json` behind.** Editing `version` in `package.json` by hand does
+  not touch the lockfile, which keeps claiming the old version in two places. `npm install
+  --package-lock-only` re-syncs it. Found 2026-10-24 with the lock still on 3.1.0 after the bump to 3.2.0.
+- **`workflow_dispatch` only works for workflows that exist on the DEFAULT branch.** A new workflow on a
+  feature branch cannot be triggered at all — not from the Actions tab, not with `gh workflow run --ref`.
+  So a release workflow cannot be smoke-tested before it reaches `main`; plan for the first real run to
+  be the one that counts, or merge a dispatch-only version first.
+- **GitHub Action majors move much faster than the examples you remember.** On 2026-10-24
+  `actions/checkout` and `actions/setup-node` were at **v7**, `upload-artifact` at **v7** and
+  `download-artifact` at **v8** — while most documentation still shows `@v4`. Writing the version from
+  memory is the commonest first-run failure. Check with
+  `gh api repos/actions/<name>/releases/latest --jq .tag_name` before committing a workflow.
+
+---
+
 ## Repo layout (observed 2026-10-23)
 
 - **`CLAUDE.md` only works at the repo root.** Claude Code auto-loads it from the working directory and
