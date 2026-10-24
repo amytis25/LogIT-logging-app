@@ -1,0 +1,93 @@
+# release.yml
+# Description: builds LogIT for Windows, macOS and Linux on their own runners.
+#              Two of the three cannot be built on the author's machine at all,
+#              which is why this exists. Nothing here publishes anything: at this
+#              stage the artifacts are workflow artifacts only.
+# Inputs:  a manual dispatch from the Actions tab
+# Outputs: three uploaded artifacts carrying the four release files
+# Created: 2026-10-24
+
+name: Release
+
+on:
+  workflow_dispatch:
+
+# Needed by the release-assembling job; harmless while this only builds.
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Report all three outcomes rather than cancelling the others on the
+      # first failure — when a platform breaks, knowing whether the other two
+      # are fine is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: windows
+            builder_flag: --win
+            files: |
+              release/LogIT-*-Windows-Installer.exe
+              release/LogIT-*-Windows-Portable.exe
+          - os: macos-latest
+            artifact: macos
+            builder_flag: --mac
+            files: release/LogIT-*-macOS.dmg
+          - os: ubuntu-latest
+            artifact: linux
+            builder_flag: --linux
+            files: release/LogIT-*-Linux.AppImage
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the headless suites
+        run: npm test
+
+      - name: Generate the icons and the dmg background
+        run: npm run icons
+
+      # build/ is gitignored, so these exist only because the step above made
+      # them. Without this guard electron-builder would quietly package the
+      # default Electron icon and ship a release that looks like someone
+      # else's app.
+      - name: Fail if a generated build asset is missing
+        shell: bash
+        run: |
+          for asset in build/icon.ico build/icon.png build/dmg-background.png; do
+            if [ ! -f "$asset" ]; then
+              echo "missing $asset — build/ is gitignored, so npm run icons must produce it"
+              exit 1
+            fi
+            echo "ok: $asset ($(wc -c < "$asset") bytes)"
+          done
+
+      - name: Build the renderer bundle
+        run: npm run build:renderer
+
+      # --publish never is a safety rail, not a formality: electron-builder can
+      # publish to GitHub on its own when a token is present, and a release that
+      # appears without the author publishing it is this design's worst outcome.
+      - name: Package ${{ matrix.artifact }}
+        run: npx electron-builder ${{ matrix.builder_flag }} --publish never
+
+      - name: Upload ${{ matrix.artifact }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
