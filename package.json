@@ -44,8 +44,12 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
       "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "artifactName": "${productName}-${version}-Windows-Installer.${ext}"
