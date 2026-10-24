@@ -1,7 +1,7 @@
 {
   "name": "logit",
   "productName": "LogIT",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Single-user, local-only desktop time logger. The log is the product.",
   "license": "MIT",
   "type": "module",
@@ -47,12 +47,27 @@
       "oneClick": true,
       "perMachine": false,
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "${productName}-${version}-Windows-Installer.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-Windows-Portable.${ext}"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [{ "target": "dmg", "arch": "universal" }],
       "category": "public.app-category.productivity",
       "icon": "build/icon.png"
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-macOS.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Utility",
+      "icon": "build/icon.png"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-Linux.${ext}"
     }
   }
 }
