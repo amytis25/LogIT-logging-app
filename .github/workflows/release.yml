@@ -1,18 +1,21 @@
 # release.yml
-# Description: builds LogIT for Windows, macOS and Linux on their own runners.
-#              Two of the three cannot be built on the author's machine at all,
-#              which is why this exists. Nothing here publishes anything: at this
-#              stage the artifacts are workflow artifacts only.
-# Inputs:  a manual dispatch from the Actions tab
-# Outputs: three uploaded artifacts carrying the four release files
+# Description: builds LogIT for Windows, macOS and Linux on their own runners and
+#              assembles the four files into one DRAFT GitHub release. Two of the
+#              three platforms cannot be built on the author's machine at all,
+#              which is why this exists. Nothing here publishes: the draft is
+#              visible only to the author until she publishes it by hand.
+# Inputs:  a push to main whose package.json version has no published release yet,
+#          or a manual dispatch
+# Outputs: a draft release tagged v<version> carrying the four artifacts
 # Created: 2026-10-24
 
 name: Release
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
-# Needed by the release-assembling job; harmless while this only builds.
 permissions:
   contents: write
 
@@ -20,13 +23,38 @@ env:
   NODE_VERSION: '20'
 
 jobs:
+  # Decides whether this push is a release at all. A documentation commit on main
+  # is an ordinary push — without this, every one of them would cut a release.
+  gate:
+    name: Should this version build?
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      replace_draft: ${{ steps.decide.outputs.replace_draft }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Decide
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          releases=$(gh release list --json tagName,isDraft --limit 100)
+          node scripts/release-gate.mjs "$releases"
+
   build:
     name: Build ${{ matrix.artifact }}
+    needs: gate
+    if: needs.gate.outputs.build == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
-      # Report all three outcomes rather than cancelling the others on the
-      # first failure — when a platform breaks, knowing whether the other two
-      # are fine is most of the diagnosis.
+      # Report all three outcomes rather than cancelling the others on the first
+      # failure — when a platform breaks, knowing whether the other two are fine
+      # is most of the diagnosis.
       fail-fast: false
       matrix:
         include:
@@ -91,3 +119,50 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.files }}
           if-no-files-found: error
+
+  # `needs` requires every build leg to have succeeded, so a single platform
+  # failure means this job never runs. A draft quietly missing its macOS file
+  # could be published without the absence being noticed; one red run cannot.
+  release:
+    name: Assemble the draft release
+    needs: [gate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Collect the artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Render the release notes
+        run: node scripts/render-release-notes.mjs release-notes.md
+
+      # Only ever a draft: the gate returns build=false when a PUBLISHED release
+      # exists for this version, so nothing published can reach this step.
+      - name: Replace the previous draft
+        if: needs.gate.outputs.replace_draft == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "${{ needs.gate.outputs.tag }}" --yes
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ needs.gate.outputs.tag }}" \
+            --draft \
+            --title "${{ needs.gate.outputs.tag }}" \
+            --notes-file release-notes.md \
+            artifacts/*
+
+      - name: Say where it went
+        run: |
+          echo "Draft release ${{ needs.gate.outputs.tag }} created with:"
+          ls -1 artifacts/
+          echo "It is NOT public. Publish it yourself once you have checked it."
